@@ -1,0 +1,82 @@
+{
+  "targets": [
+    {
+      "label": "자사",
+      "mall": "(우리 스토어 이름으로 수정)",
+      "url": "https://smartstore.naver.com/여기에-우리-대표상품-URL-붙여넣기",
+      "memo": "자사 대표 상품 — URL을 실제 주소로 바꿔주세요"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "요기에코백",
+      "url": "https://smartstore.naver.com/main/products/10715024573",
+      "memo": "에코백제작 1위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "studio s..",
+      "url": "https://smartstore.naver.com/main/products/8666960647",
+      "memo": "에코백제작 2위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "오굿기프트",
+      "url": "https://smartstore.naver.com/main/products/13437929390",
+      "memo": "에코백제작 4위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "백바이백",
+      "url": "https://smartstore.naver.com/main/products/4406828598",
+      "memo": "에코백제작 5위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "아유디샵",
+      "url": "https://smartstore.naver.com/main/products/5759871098",
+      "memo": "에코백제작 7위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "사자크몰",
+      "url": "https://smartstore.naver.com/main/products/11488293190",
+      "memo": "에코백제작 8위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "FOR155",
+      "url": "https://smartstore.naver.com/main/products/4745982213",
+      "memo": "에코백제작 9위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "리틀데이지샵",
+      "url": "https://smartstore.naver.com/main/products/9981867843",
+      "memo": "에코백제작 10위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "tipping",
+      "url": "https://smartstore.naver.com/main/products/137345828",
+      "memo": "에코백제작 11위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "더-오래",
+      "url": "https://smartstore.naver.com/main/products/9178585117",
+      "memo": "에코백제작 12위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "조선상인",
+      "url": "https://smartstore.naver.com/main/products/4416190855",
+      "memo": "에코백제작 15위"
+    },
+    {
+      "label": "경쟁사",
+      "mall": "담 백",
+      "url": "https://smartstore.naver.com/main/products/5809104684",
+      "memo": "에코백 주문제작 10위"
+    }
+  ]
+}
