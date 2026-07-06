@@ -1,0 +1,33 @@
+name: daily-competitor-monitor
+
+on:
+  schedule:
+    - cron: "30 22 * * *" # 매일 07:30 KST
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Crawl Naver shopping rankings
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+        run: python monitor/crawl.py
+
+      - name: Commit snapshot
+        run: |
+          git config user.name "monitor-bot"
+          git config user.email "actions@github.com"
+          git add docs/data
+          git diff --cached --quiet || git commit -m "monitor: $(TZ=Asia/Seoul date +%F) 스냅샷"
+          git push

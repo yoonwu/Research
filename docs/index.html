@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>에코백 키워드 경쟁사 모니터</title>
+<script src="vendor/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2330; --sub:#5b6472; --line:#e3e6ec;
+          --up:#0a7d4f; --down:#c0392b; --accent:#2456c8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12151b; --card:#1b202a; --ink:#e8ebf1; --sub:#98a1b0; --line:#2a3140; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { padding:20px 24px 8px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--sub); font-size:13px; }
+  .mock-banner { background:#b8860b; color:#fff; padding:8px 24px; font-size:13px; }
+  .controls { display:flex; gap:12px; align-items:center; padding:12px 24px; flex-wrap:wrap; }
+  select { font-size:14px; padding:6px 10px; border-radius:8px; border:1px solid var(--line);
+           background:var(--card); color:var(--ink); }
+  main { padding:0 24px 40px; display:grid; gap:16px; max-width:1200px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h2 { font-size:15px; margin:0 0 12px; }
+  .chart-wrap { position:relative; height:340px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--sub); font-weight:600; font-size:12px; }
+  td.num, th.num { text-align:right; }
+  .delta-up { color:var(--up); font-weight:600; }
+  .delta-down { color:var(--down); font-weight:600; }
+  .delta-flat { color:var(--sub); }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:800px) { .two-col { grid-template-columns:1fr; } }
+  .tbl-scroll { overflow-x:auto; }
+  .note { font-size:12px; color:var(--sub); margin-top:8px; }
+  .badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
+           background:var(--accent); color:#fff; margin-left:6px; }
+</style>
+</head>
+<body>
+<div id="mockBanner" class="mock-banner" style="display:none">
+  ⚠️ 지금 보고 있는 것은 샘플(모의) 데이터입니다. 네이버 API 키를 GitHub Secrets에 등록하면 다음 실행부터 실제 데이터가 쌓입니다.
+</div>
+<header>
+  <h1>에코백 키워드 경쟁사 모니터 <span id="dateBadge" class="badge"></span></h1>
+  <div class="sub">네이버 쇼핑 검색 상위 100개 상품을 매일 07:30(KST)에 수집해 순위·가격·노출 상품 수를 추적합니다.</div>
+</header>
+<div class="controls">
+  <label>키워드 <select id="kwSelect"></select></label>
+  <label>기간
+    <select id="rangeSelect">
+      <option value="14">최근 14일</option>
+      <option value="30" selected>최근 30일</option>
+      <option value="90">최근 90일</option>
+      <option value="99999">전체</option>
+    </select>
+  </label>
+</div>
+<main>
+  <div class="card">
+    <h2>업체별 최고 순위 추이 (낮을수록 상위 노출)</h2>
+    <div class="chart-wrap"><canvas id="rankChart"></canvas></div>
+    <div class="note">오늘 기준 노출 상품이 많은 상위 8개 업체를 표시합니다. 선이 아래로 갈수록 순위가 좋아지는 것입니다.</div>
+  </div>
+  <div class="card">
+    <h2>오늘의 업체 현황</h2>
+    <div class="tbl-scroll">
+      <table id="mallTable">
+        <thead><tr>
+          <th>업체</th><th class="num">최고순위</th><th class="num">7일 전 대비</th>
+          <th class="num">노출 상품 수</th><th class="num">상품 수 변화(7일)</th>
+          <th class="num">평균가</th><th class="num">평균가 변화(7일)</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <h2>📈 뜨는 업체 (7일간 순위 개선)</h2>
+      <table id="risingTable"><tbody></tbody></table>
+    </div>
+    <div class="card">
+      <h2>📉 밀리는 업체 (7일간 순위 하락·이탈)</h2>
+      <table id="fallingTable"><tbody></tbody></table>
+    </div>
+  </div>
+  <div class="card">
+    <h2>오늘의 상위 20 상품</h2>
+    <div class="tbl-scroll">
+      <table id="topTable">
+        <thead><tr><th class="num">순위</th><th>상품명</th><th>업체</th><th class="num">가격</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script>
+const state = { dates: [], snaps: {}, keyword: null, range: 30, chart: null };
+
+const fmt = n => n.toLocaleString('ko-KR');
+const el = id => document.getElementById(id);
+
+async function loadIndex() {
+  const idx = await (await fetch('data/index.json?_=' + new Date().getTime())).json();
+  return idx.dates || [];
+}
+async function loadSnap(date) {
+  if (state.snaps[date]) return state.snaps[date];
+  const s = await (await fetch(`data/snapshots/${date}.json`)).json();
+  state.snaps[date] = s;
+  return s;
+}
+
+// 스냅샷에서 키워드별 업체 요약: {mall: {bestRank, count, avgPrice}}
+function mallStats(snap, kw) {
+  const out = {};
+  for (const item of (snap.keywords[kw] || [])) {
+    if (!item.mall) continue;
+    const m = out[item.mall] || (out[item.mall] = { bestRank: Infinity, count: 0, priceSum: 0 });
+    m.bestRank = Math.min(m.bestRank, item.rank);
+    m.count++;
+    m.priceSum += item.price;
+  }
+  for (const m of Object.values(out)) m.avgPrice = Math.round(m.priceSum / m.count);
+  return out;
+}
+
+function deltaCell(delta, invert = false, suffix = '') {
+  if (delta === null) return '<td class="num delta-flat">신규</td>';
+  if (delta === 0) return '<td class="num delta-flat">—</td>';
+  const good = invert ? delta < 0 : delta > 0;
+  const cls = good ? 'delta-up' : 'delta-down';
+  const arrow = delta > 0 ? '▲' : '▼';
+  return `<td class="num ${cls}">${arrow}${fmt(Math.abs(delta))}${suffix}</td>`;
+}
+
+async function render() {
+  const kw = state.keyword;
+  const dates = state.dates.slice(-state.range);
+  const snaps = await Promise.all(dates.map(loadSnap));
+  const today = snaps[snaps.length - 1];
+  const weekAgo = snaps[Math.max(0, snaps.length - 8)];
+
+  el('dateBadge').textContent = today.date;
+  el('mockBanner').style.display = today.mock ? 'block' : 'none';
+
+  const todayStats = mallStats(today, kw);
+  const pastStats = mallStats(weekAgo, kw);
+
+  // ── 업체 현황 테이블
+  const malls = Object.entries(todayStats).sort((a, b) => a[1].bestRank - b[1].bestRank);
+  el('mallTable').querySelector('tbody').innerHTML = malls.map(([name, s]) => {
+    const p = pastStats[name];
+    const rankD = p ? s.bestRank - p.bestRank : null;
+    const cntD = p ? s.count - p.count : null;
+    const priceD = p ? s.avgPrice - p.avgPrice : null;
+    return `<tr><td>${name}</td><td class="num">${s.bestRank}</td>${deltaCell(rankD, true)}
+      <td class="num">${s.count}</td>${deltaCell(cntD)}
+      <td class="num">${fmt(s.avgPrice)}원</td>${deltaCell(priceD, false, '원')}</tr>`;
+  }).join('');
+
+  // ── 뜨는/밀리는 업체
+  const moves = [];
+  const allNames = new Set([...Object.keys(todayStats), ...Object.keys(pastStats)]);
+  for (const name of allNames) {
+    const t = todayStats[name], p = pastStats[name];
+    if (t && p) moves.push({ name, delta: p.bestRank - t.bestRank, note: `${p.bestRank}위 → ${t.bestRank}위` });
+    else if (t) moves.push({ name, delta: 50, note: `신규 진입 (${t.bestRank}위)` });
+    else moves.push({ name, delta: -50, note: `상위 100 이탈 (7일 전 ${p.bestRank}위)` });
+  }
+  const rising = moves.filter(m => m.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 8);
+  const falling = moves.filter(m => m.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 8);
+  el('risingTable').querySelector('tbody').innerHTML =
+    rising.map(m => `<tr><td>${m.name}</td><td class="delta-up">${m.note}</td></tr>`).join('') ||
+    '<tr><td class="delta-flat">해당 없음</td></tr>';
+  el('fallingTable').querySelector('tbody').innerHTML =
+    falling.map(m => `<tr><td>${m.name}</td><td class="delta-down">${m.note}</td></tr>`).join('') ||
+    '<tr><td class="delta-flat">해당 없음</td></tr>';
+
+  // ── 상위 20 상품
+  el('topTable').querySelector('tbody').innerHTML = (today.keywords[kw] || []).slice(0, 20)
+    .map(i => `<tr><td class="num">${i.rank}</td><td>${i.title}</td><td>${i.mall}</td>
+               <td class="num">${fmt(i.price)}원</td></tr>`).join('');
+
+  // ── 순위 추이 차트 (오늘 노출 상품 수 상위 8개 업체)
+  const topMalls = malls.sort((a, b) => b[1].count - a[1].count).slice(0, 8).map(([n]) => n);
+  const colors = ['#2456c8','#c0392b','#0a7d4f','#b8860b','#7d3ac1','#0e8a8a','#d4671f','#5b6472'];
+  const datasets = topMalls.map((name, i) => ({
+    label: name,
+    data: snaps.map(s => { const st = mallStats(s, kw)[name]; return st ? st.bestRank : null; }),
+    borderColor: colors[i], backgroundColor: colors[i],
+    spanGaps: false, tension: 0.25, pointRadius: 2, borderWidth: 2,
+  }));
+  if (state.chart) state.chart.destroy();
+  state.chart = new Chart(el('rankChart'), {
+    type: 'line',
+    data: { labels: dates.map(d => d.slice(5)), datasets },
+    options: {
+      maintainAspectRatio: false,
+      scales: { y: { reverse: true, min: 1, title: { display: true, text: '순위' } } },
+      plugins: { legend: { position: 'bottom' } },
+      interaction: { mode: 'nearest', intersect: false },
+    },
+  });
+}
+
+async function init() {
+  state.dates = await loadIndex();
+  if (!state.dates.length) { document.body.innerHTML = '<p style="padding:24px">아직 수집된 데이터가 없습니다.</p>'; return; }
+  const latest = await loadSnap(state.dates[state.dates.length - 1]);
+  const kws = Object.keys(latest.keywords);
+  el('kwSelect').innerHTML = kws.map(k => `<option>${k}</option>`).join('');
+  state.keyword = kws[0];
+  el('kwSelect').onchange = e => { state.keyword = e.target.value; render(); };
+  el('rangeSelect').onchange = e => { state.range = +e.target.value; render(); };
+  render();
+}
+init();
+</script>
+</body>
+</html>
